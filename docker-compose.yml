@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: coopcredit-postgres
+    environment:
+      POSTGRES_DB: coopcredit
+      POSTGRES_USER: coopuser
+      POSTGRES_PASSWORD: cooppassword
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U coopuser -d coopcredit" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coopcredit-network
+
+  risk-central-mock:
+    build: ./risk-central-mock
+    container_name: risk-central-mock
+    ports:
+      - "8083:8083"
+    networks:
+      - coopcredit-network
+
+  coopcredit-app:
+    build: .
+    container_name: coopcredit-app
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/coopcredit
+      - SPRING_DATASOURCE_USERNAME=coopuser
+      - SPRING_DATASOURCE_PASSWORD=cooppassword
+      - JWT_SECRET=7d4c6e5a6f2b7a8d9e1c3f5a8b2d4e7f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d
+      - JWT_EXPIRATION=86400000
+      - RISK_SERVICE_URL=http://risk-central-mock:8083/risk-evaluation
+    depends_on:
+      postgres:
+        condition: service_healthy
+      risk-central-mock:
+        condition: service_started
+    networks:
+      - coopcredit-network
+
+networks:
+  coopcredit-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+
